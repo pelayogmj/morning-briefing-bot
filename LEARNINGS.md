@@ -40,6 +40,32 @@ A skill (`.claude/skills/briefing-style/SKILL.md`) is the same mechanism as `CLA
 - **What confused me**: TODO
 - **What I'd do differently**: TODO
 
+## Stage 4: Hooks and subagents
+
+### Hooks vs. prompts — the factual answer
+
+A prompt (even a strong one in `CLAUDE.md`) only shapes behavior if Claude chooses to follow it — it's a request. A hook is a separate script the harness runs itself at a fixed point (`PreToolUse` before a tool call, `PostToolUse` after), with the power to actually block a `PreToolUse` call outright (exit code 2) regardless of what Claude decided. This project proved it three ways live: reading `.env` was genuinely blocked (not just discouraged), `git reset --hard` was blocked, and `git commit` was blocked until a security review was recorded for the exact staged diff — none of that depended on Claude remembering a rule.
+
+One real limitation hit along the way: `PostToolUse` can't prevent anything — the edit has already happened by the time it fires. It can only report a problem (e.g. a failing test) immediately afterward, which is still useful, just a different guarantee than `PreToolUse`'s actual blocking.
+
+Another non-obvious finding: skills and custom commands (`.claude/skills/`, `.claude/commands/`) hot-reloaded mid-session with no restart needed — but a newly added subagent (`.claude/agents/`) did not. It only became invokable after starting a brand-new session (either a fresh `claude` CLI process or a new session tab). Not everything under `.claude/` is discovered the same way.
+
+A third finding, hit while committing this very stage: `block_destructive_bash.py` does plain text matching on the whole Bash command string, so a `git commit -m "..."` whose message *describes* a blocked pattern (e.g. literally contains the text "git reset --hard") triggers a false-positive block — the hook can't tell "this text names a command" from "this text runs a command." Real limitation of naive text-matching hooks, not fixed here; worth knowing before writing a commit message that quotes a blocked pattern.
+
+A fourth finding, hit right after: `PreToolUse` fires once for the *entire* Bash command string before any of it runs — chaining `tools/mark_security_reviewed.py && git commit ...` in a single Bash call fails, because the hook checks the marker file before `mark_security_reviewed.py` has actually executed. The review-then-commit sequence has to be two separate Bash tool calls, not one chained command.
+
+### Subagents — the factual answer
+
+A subagent (`.claude/agents/email-triager.md`) runs with its own isolated context and a restricted tool set (here, just `Bash`) — it can't see this conversation's history, and this conversation doesn't see its internal reasoning, only the final result it hands back. That isolation is the point: a focused task (triage the inbox) gets a focused specialist instead of consuming the main session's context.
+
+### Personal reflection
+
+*Draft reflection — edit freely, this is your call, not mine.*
+
+- **What I learned**: TODO
+- **What confused me**: TODO
+- **What I'd do differently**: TODO
+
 ---
 
 # Claude Code Feature Tour

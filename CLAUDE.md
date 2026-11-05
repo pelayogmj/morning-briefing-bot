@@ -90,6 +90,16 @@ credentials.json, token.json  # Google OAuth (gitignored)
 - **`/briefing`'s fixed format**: always exactly three lines in order — greeting+weather, calendar, email — never reordered or merged into a paragraph. See `.claude/skills/briefing-style/SKILL.md` for the exact rules; edit that file (not this one) to change the briefing's tone/format.
 - **Retry transient network errors, don't just fail**: `tools/get_weather.py`'s `fetch_forecast` retries up to 3 times (2s delay) on `ConnectionResetError` before giving up, since Open-Meteo resets connections occasionally for no real reason. Reserve this pattern for genuinely transient errors — don't retry on actual HTTP error responses.
 
+## Conventions (added Stage 4)
+
+- **Hooks enforce; prompts only ask.** This project's `.claude/settings.json` wires four hooks, all implemented as small, testable scripts in `.claude/hooks/` (logic lives in Python, not opaque JSON matcher strings):
+  - `block_sensitive_read.py` (PreToolUse/`Read`): blocks reading `.env`, `credentials.json`, or `token.json` outright.
+  - `block_destructive_bash.py` (PreToolUse/`Bash`): blocks `rm -rf`, `git push --force`/`-f`, `git reset --hard`, `git clean -f` — an enforced backstop on Claude's own existing safety guidelines.
+  - `require_security_review.py` (PreToolUse/`Bash`): blocks `git commit` unless a security review has been recorded for the *currently staged* diff (see below).
+  - `run_tests_on_py_edit.py` (PostToolUse/`Edit|Write`): runs `pytest` automatically after any `.py` file is edited and surfaces failures immediately. Can't block the edit (already happened), only report.
+- **Security-review gate is a custom convention, not a built-in Claude Code feature.** Hooks have no memory of what happened earlier in a session, so "has a review already run?" is tracked via `.claude/.security-review-passed` (gitignored) — a hash of `git diff --cached` written by `tools/mark_security_reviewed.py`. Workflow: run the `security-review` skill (or, if it can't run — e.g. no `origin` remote configured — do a manual review) → confirm it's clean → `.venv/Scripts/python.exe tools/mark_security_reviewed.py` → then `git commit` is unblocked for that exact staged diff. Any further staging changes invalidate it again.
+- **Subagent**: `.claude/agents/email-triager.md` — reads unread email via `tools/get_gmail.py` and returns a ranked shortlist by urgency. Runs in its own isolated context; invoke explicitly ("use the email-triager subagent...") or let Claude match it by task.
+
 ## Bottom Line
 
 You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.
