@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "google-calendar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@cocal/google-calendar-mcp"
+      ],
+      "env": {
+        "GOOGLE_OAUTH_CREDENTIALS": "C:\\absolute\\path\\to\\your\\repo\\credentials.json"
+      }
+    },
+    "gmail": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@shinzolabs/gmail-mcp"
+      ],
+      "env": {}
+    }
+  }
+}

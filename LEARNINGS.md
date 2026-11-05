@@ -8,6 +8,24 @@
 - **What confused me**: TODO
 - **What I'd do differently**: TODO
 
+## Stage 2: Calendar + Gmail (MCP and direct API)
+
+### MCP vs. direct API — the factual answer
+
+MCP lets Claude call a tool *while a live, human-driven Claude Code session is open* — the MCP server brokers the call through that running session. It has no trigger of its own; nothing wakes it up on a schedule. A script meant to run unattended (e.g. the 7am morning briefing, with no one watching) has no session for an MCP server to attach to, so it can't use MCP at all. It needs its own credentials and calls the provider's API directly instead — which is exactly what `tools/google_auth.py` + `tools/get_calendar.py` + `tools/get_gmail.py` do, independently of any MCP server.
+
+The two paths are complementary, not competing: MCP is for interactive, ad hoc use (e.g. asking Claude to check today's calendar mid-conversation); direct API access is for scheduled/automated use (the eventual cron job).
+
+Secondary point — **MCP scope**: `claude mcp add --scope project` writes the server config to `.mcp.json` in the repo (shared with anyone who clones it); `--scope user` stores it outside the repo, private to one person across all their projects.
+
+### Personal reflection
+
+*Draft reflection — edit freely, this is your call, not mine.*
+
+- **What I learned**: TODO
+- **What confused me**: TODO
+- **What I'd do differently**: TODO
+
 ---
 
 # Claude Code Feature Tour
