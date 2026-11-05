@@ -26,6 +26,20 @@ Secondary point — **MCP scope**: `claude mcp add --scope project` writes the s
 - **What confused me**: TODO
 - **What I'd do differently**: TODO
 
+## Stage 3: Skills and custom commands
+
+### What "skills" demonstrated here — the factual answer
+
+A skill (`.claude/skills/briefing-style/SKILL.md`) is the same mechanism as `CLAUDE.md` — persistent instructions Claude reads — just scoped to one reusable, swappable file instead of baked into a script or the whole project's instructions. The custom command (`.claude/commands/briefing.md`, run as `/briefing`) is what actually *does* something: it runs the deterministic `tools/` scripts, then explicitly loads the skill to decide how to present the result. Editing `SKILL.md` alone (no code touched) visibly changed the briefing's format from a flowing paragraph to a fixed three-line structure — proving skills only affect *Claude's* own output, never a standalone script's, since a script never reads skill files at all.
+
+### Personal reflection
+
+*Draft reflection — edit freely, this is your call, not mine.*
+
+- **What I learned**: TODO
+- **What confused me**: TODO
+- **What I'd do differently**: TODO
+
 ---
 
 # Claude Code Feature Tour

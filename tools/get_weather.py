@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -11,6 +12,12 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TMP_DIR = PROJECT_ROOT / ".tmp"
+
+# Open-Meteo occasionally resets the connection (observed repeatedly as
+# ConnectionResetError on Windows) for no server-side reason -- a transient
+# network blip, not a real failure. Retry a couple of times before giving up.
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 2
 
 # WMO weather codes (subset relevant to Open-Meteo's `weathercode` field).
 WEATHER_CODES = {
@@ -73,9 +80,18 @@ def fetch_forecast(lat, lon):
         "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode",
         "timezone": "auto",
     }
-    response = requests.get(url, params=params, timeout=10)
-    response.raise_for_status()
-    return response.json()
+
+    last_error = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.ConnectionError as exc:
+            last_error = exc
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY_SECONDS)
+    raise last_error
 
 
 def save_snapshot(api_response):
