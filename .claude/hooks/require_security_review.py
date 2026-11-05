@@ -21,14 +21,16 @@ COMMIT_PATTERN = re.compile(r"\bgit\s+commit\b")
 
 
 def staged_diff_hash():
+    # Raw bytes (no text=True) -- diffs can contain arbitrary UTF-8
+    # content (e.g. emoji in a .md file) that Windows' default console
+    # codepage can't decode; hashing bytes directly avoids that entirely.
     result = subprocess.run(
         ["git", "diff", "--cached"],
         cwd=PROJECT_ROOT,
         capture_output=True,
-        text=True,
         check=True,
     )
-    return hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
+    return hashlib.sha256(result.stdout).hexdigest()
 
 
 def main():

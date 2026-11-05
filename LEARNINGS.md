@@ -66,6 +66,26 @@ A subagent (`.claude/agents/email-triager.md`) runs with its own isolated contex
 - **What confused me**: TODO
 - **What I'd do differently**: TODO
 
+## Stage 5: Automation and delivery
+
+### Headless mode, scheduling, and billing — the factual answer
+
+`claude -p "<prompt>"` runs Claude non-interactively: one prompt in, result printed, exit. For an unattended context with nobody to approve tool calls, `--permission-prompts none` denies anything needing approval instead of hanging, paired with `--allowedTools` to pre-approve exactly what's needed.
+
+The real surprise was billing. There are two genuinely different paths: authenticate with an `ANTHROPIC_API_KEY` (pay-per-token, uncapped — the default for GitHub's official Claude Code Action) versus authenticate with a `CLAUDE_CODE_OAUTH_TOKEN` generated via `claude setup-token` (tied to a personal Pro/Max subscription, bounded by that plan's existing usage limits, same behavior as using Claude normally). Nothing about "running Claude in CI" implies one or the other — it depends entirely on which credential you hand it.
+
+A real deployment bug, caught on the first live run: `npm install -g @anthropic-ai/claude-code` with no version pin installed a CLI in CI that didn't yet support `--permission-prompts`, even though the exact same unpinned command locally had picked up a version that did. "Works on my machine" applies to CLI tool versions too, not just code — the fix was pinning an exact known-good version in the workflow instead of trusting "latest" to mean the same thing in two different environments on two different days.
+
+A second real gap: Claude's own hosted scheduled-routine feature (not GitHub Actions — Claude's native cloud scheduler) has no documented way to hold file-based secrets. It only supports plain environment variables (explicitly not meant for credentials) or bearer-token injection into HTTP headers for one named host. Our Google OAuth setup needs actual files on disk, so that platform was ruled out in favor of GitHub Actions' proper encrypted secrets store — a good reminder that "Claude can schedule things" and "Claude's scheduler fits this specific use case" are different questions.
+
+### Personal reflection
+
+*Draft reflection — edit freely, this is your call, not mine.*
+
+- **What I learned**: TODO
+- **What confused me**: TODO
+- **What I'd do differently**: TODO
+
 ---
 
 # Claude Code Feature Tour

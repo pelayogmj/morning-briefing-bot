@@ -1,15 +1,18 @@
 ---
 description: Gather weather/calendar/email data and render today's briefing
-allowed-tools: Bash(.venv/Scripts/python.exe tools/*.py:*)
+allowed-tools: Bash(.venv/Scripts/python.exe tools/*.py:*), Bash(.venv/bin/python tools/*.py:*), Bash(python tools/*.py:*)
 ---
 
 Run today's morning briefing and present it to the user in natural,
 human-toned prose.
 
 Steps:
-1. Run `.venv/Scripts/python.exe tools/morning_briefing.py` from the
-   project root using the Bash tool, and read its raw output (weather
-   paragraph, calendar events block, inbox block).
+1. Run `tools/morning_briefing.py` from the project root using the Bash
+   tool, with the project's venv Python if it exists
+   (`.venv/Scripts/python.exe` on Windows, `.venv/bin/python` on
+   Linux/Mac), otherwise plain `python` (e.g. in a CI runner with no
+   venv). Read its raw output (weather paragraph, calendar events block,
+   inbox block).
 2. Read `.claude/skills/briefing-style/SKILL.md` and follow its tone,
    length, and prioritization rules exactly.
 3. Compose the final briefing as prose following that guidance — do not

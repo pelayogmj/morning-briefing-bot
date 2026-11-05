@@ -14,17 +14,27 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def parse_events(items):
-    """Extract {summary, time, all_day} from raw Calendar API `items`."""
+    """Extract {summary, time, all_day, location} from raw Calendar API `items`.
+
+    `location` is the event's free-text location field (empty string if
+    unset) -- used to infer today's likely city for travel days, see
+    tools/resolve_location.py.
+    """
     events = []
     for item in items:
         summary = item.get("summary", "(no title)")
+        location = item.get("location", "")
         start = item.get("start", {})
         if "date" in start:
-            events.append({"summary": summary, "time": None, "all_day": True})
+            events.append(
+                {"summary": summary, "time": None, "all_day": True, "location": location}
+            )
         else:
             date_time = start.get("dateTime", "")
             time_str = date_time[11:16] if len(date_time) >= 16 else date_time
-            events.append({"summary": summary, "time": time_str, "all_day": False})
+            events.append(
+                {"summary": summary, "time": time_str, "all_day": False, "location": location}
+            )
     return events
 
 

@@ -6,10 +6,12 @@ user-invocable: false
 
 # Briefing Style
 
-Rules for turning the raw output of `tools/morning_briefing.py` into the
-final text shown to the user. This is presentation guidance only — never
-re-fetch or re-derive the underlying data; just rephrase what the tools
-already reported.
+Rules for turning the raw output of `tools/get_weather.py`,
+`tools/get_calendar.py`, and `tools/get_gmail.py` into the final text
+shown to the user — used by both the interactive `/briefing` command and
+the automated `tools/send_morning_briefing.py` pipeline. This is
+presentation guidance only — never re-fetch or re-derive the underlying
+data; just rephrase what the tools already reported.
 
 ## Tone
 
@@ -25,19 +27,39 @@ Rephrase facts the way a person would say them out loud.
 
 ## Format
 
-Always exactly three lines, in this fixed order — never reorder based on
-urgency, and never merge them into one flowing paragraph:
+Always exactly three blocks, in this fixed order, **separated by a
+blank line** — never reorder based on urgency, and never merge them
+into one flowing paragraph. This is plain text (no Markdown/HTML bold
+or asterisks — it won't render as formatting and may break delivery)
+— use an emoji at the start of each block instead to make it scannable
+at a glance:
 
-1. Greeting + weather, one sentence: "Good morning! Today in
-   {location} {weather description}, {temps}, {rain chance}."
-2. Calendar info — one line (or "Nothing on your calendar today" if
-   empty).
-3. Email info — one line (or "Inbox is empty" if empty).
+1. **🌤️ Weather** (pick the emoji to match conditions — e.g. ☀️ clear,
+   ⛅/☁️ cloudy/overcast, 🌧️ rain, ❄️ snow, 🌫️ fog, ⛈️ thunderstorms):
+   "Good morning! Today in {location} {weather description}, {temps},
+   {rain chance}."
+2. **📅 Calendar** — combine *every* event from today into one flowing
+   sentence (not bullets), each with its time and title, e.g.: "Today's
+   events are: lunch with Alex at 12:30, a team meeting at 15:00, and
+   dinner with Megan at 21:00." If there are no events: "Nothing on your
+   calendar today."
+3. **💬 Inbox** — for each unread email, write a short summary of what
+   it's actually *about*, using its snippet (the short content preview
+   each email tool run provides) — not a reworded subject line. E.g.
+   given subject "Fwd: You've been invited..." and a snippet about a
+   collaboration invite, write something like "You've got a forwarded
+   invite to collaborate on a project." If there's exactly one email,
+   write it as a single line with no number. **If there's more than
+   one, use a numbered list** (`1.`, `2.`, ...), one email per line —
+   never blend multiple emails into consecutive sentences, and never
+   combine them into one sentence (unlike the calendar line, which does
+   combine). If there are no unread emails: "Inbox is empty."
 
 Keep this same shape every time so the briefing is consistently
 scannable. No padding, no preamble like "Here is your briefing:" —
-just the three lines. Don't over-elaborate low-signal sections — one
-unread email or one quiet afternoon still gets just one line.
+just the three blocks above, each starting with its emoji. Don't
+over-elaborate low-signal sections — one unread email or one quiet
+afternoon still gets just one short line.
 
 ## What to leave out
 

@@ -15,7 +15,12 @@ DEFAULT_LIMIT = 5
 
 
 def parse_unread_messages(messages):
-    """Extract {subject, sender} from raw Gmail API message resources."""
+    """Extract {subject, sender, snippet} from raw Gmail API message resources.
+
+    `snippet` is a short plain-text preview Gmail generates itself; it's
+    already present in a `format=metadata` response, no extra scope or API
+    call needed.
+    """
     parsed = []
     for message in messages:
         headers = {
@@ -29,7 +34,13 @@ def parse_unread_messages(messages):
             sender = display_name if display_name else address
         else:
             sender = "(unknown sender)"
-        parsed.append({"subject": subject, "sender": sender})
+        parsed.append(
+            {
+                "subject": subject,
+                "sender": sender,
+                "snippet": message.get("snippet", ""),
+            }
+        )
     return parsed
 
 
@@ -39,6 +50,8 @@ def format_inbox_summary(messages):
     lines = ["Top unread emails:"]
     for i, message in enumerate(messages, start=1):
         lines.append(f"  {i}. {message['subject']} — {message['sender']}")
+        if message["snippet"]:
+            lines.append(f"     {message['snippet']}")
     return "\n".join(lines)
 
 
