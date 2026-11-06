@@ -23,6 +23,7 @@ from get_gmail import (
     format_inbox_summary,
     parse_unread_messages,
 )
+from fetch_news import fetch_all_headlines, format_headlines_block
 from get_weather import fetch_forecast, format_summary, parse_today, save_snapshot
 from manage_pause_state import load_state, resolve_effective_timezone, save_state
 from resolve_location import geocode
@@ -147,7 +148,7 @@ def resolve_todays_location(home_name, home_lat, home_lon, events):
     return home_name, home_lat, home_lon
 
 
-def compose_styled_briefing(weather_line, events_block, inbox_block):
+def compose_styled_briefing(weather_line, events_block, inbox_block, news_block):
     """Invoke headless Claude to render the full styled briefing.
 
     All data is fetched deterministically by this script (main(), below)
@@ -178,6 +179,8 @@ def compose_styled_briefing(weather_line, events_block, inbox_block):
         f"Weather: {weather_line}\n\n"
         f"Calendar: {events_block}\n\n"
         f"Inbox: {inbox_block}\n\n"
+        f"News headlines (raw, unfiltered -- judge for yourself what, if "
+        f"anything, is actually significant enough to mention):\n{news_block}\n\n"
         f"Read {SKILL_PATH} and follow its tone, format, and content "
         "rules exactly."
     )
@@ -248,14 +251,12 @@ def main():
         print(f"Error: could not fetch Gmail messages ({exc})", file=sys.stderr)
         sys.exit(1)
 
-    if not events and not messages:
-        # Nothing but weather to report -- no Claude call at all, home
-        # location only (nothing to infer travel from), genuinely free.
-        location_name, lat, lon = home_name, home_lat, home_lon
-    else:
-        location_name, lat, lon = resolve_todays_location(
-            home_name, home_lat, home_lon, events
-        )
+    # infer_travel_location() already returns None for an empty events
+    # list, which cascades to the home default below -- no special-case
+    # branch needed here for an empty calendar.
+    location_name, lat, lon = resolve_todays_location(
+        home_name, home_lat, home_lon, events
+    )
 
     try:
         forecast = fetch_forecast(lat, lon)
@@ -265,18 +266,22 @@ def main():
     save_snapshot(forecast)
     weather_line = format_summary(location_name, parse_today(forecast))
 
-    if not events and not messages:
-        message = weather_line
-    else:
-        try:
-            message = compose_styled_briefing(
-                weather_line,
-                format_events_summary(events),
-                format_inbox_summary(messages),
-            )
-        except (RuntimeError, subprocess.TimeoutExpired) as exc:
-            print(f"Error: could not compose styled briefing ({exc})", file=sys.stderr)
-            sys.exit(1)
+    # News is checked every day regardless of calendar/inbox state -- the
+    # "genuinely zero-Claude quiet day" case is gone by design: Claude now
+    # always runs, to judge whether anything is significant enough to
+    # mention. A feed failure is non-fatal (see fetch_news.py).
+    news_block = format_headlines_block(fetch_all_headlines())
+
+    try:
+        message = compose_styled_briefing(
+            weather_line,
+            format_events_summary(events),
+            format_inbox_summary(messages),
+            news_block,
+        )
+    except (RuntimeError, subprocess.TimeoutExpired) as exc:
+        print(f"Error: could not compose styled briefing ({exc})", file=sys.stderr)
+        sys.exit(1)
 
     print(message)
 

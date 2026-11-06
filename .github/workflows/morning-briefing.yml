@@ -2,15 +2,20 @@ name: Morning Briefing
 
 on:
   schedule:
-    # Hourly. tools/manage_pause_state.py decides, every run, whether this
-    # is the one that should actually send -- DST and travel timezones are
-    # handled by checking the current local time in the effective timezone
-    # (zoneinfo, DST-correct automatically), not by picking a fixed UTC
-    # cron time. Cheap runs (the vast majority) do no Claude/Node work at
-    # all; estimated ~275 min/month of GitHub's 2,000 free, well within
-    # budget with headroom for other projects.
+    # Kept as a free backup trigger, but GitHub's own `schedule` event is
+    # documented as best-effort and was observed firing only once across
+    # several hours on this repo (vs. many manual runs) -- it cannot be
+    # relied on alone. The real trigger is an external cron service
+    # pinging workflow_dispatch (see README/CLAUDE.md for setup); this
+    # hourly cron just means a free, no-setup fallback still exists on
+    # top of that.
     - cron: "0 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force a send right now, bypassing the hour/already-sent gate"
+        type: boolean
+        default: false
 
 jobs:
   send-briefing:
@@ -40,12 +45,16 @@ jobs:
 
       # Never invokes headless Claude -- processes any new Telegram
       # commands (stop/continue/timezone/time), then decides SEND or SKIP
-      # based on paused state + whether it's currently the right local
-      # hour (and not already sent today) in the effective timezone.
-      # A manual workflow_dispatch run bypasses the hour/already-sent gate
-      # (FORCE_SEND=1) -- "test it right now" should actually send right
-      # now, not silently wait for the matching hour. Pause is still
-      # respected either way.
+      # based on paused state + whether it's currently at/past the
+      # configured send time (and not already sent today) in the
+      # effective timezone. FORCE_SEND only fires when a manual
+      # workflow_dispatch run explicitly checks the "force" input --
+      # NOT for every dispatch. This matters because an external cron
+      # pinger (see README/CLAUDE.md) also triggers via plain
+      # workflow_dispatch, every few minutes, and must go through the
+      # same hour/already-sent gate as a real scheduled run would --
+      # otherwise every single ping would force-send immediately.
+      # Pause is still respected either way.
       - name: Check pause/resume state
         id: check_pause
         run: |
@@ -55,7 +64,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           HOME_TIMEZONE: Europe/Zurich
-          FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+          FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true' && '1' || '0' }}
 
       # Only commits/pushes if the state file actually changed -- most
       # hourly runs this is a no-op. Runs on the briefing-state branch's

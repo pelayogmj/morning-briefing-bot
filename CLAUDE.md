@@ -122,6 +122,21 @@ credentials.json, token.json  # Google OAuth (gitignored)
   - State (`{"paused", "last_update_id", "last_sent_date", "timezone_override", "send_time"}`) lives on the same **dedicated orphan branch**, `briefing-state`, with no shared history with `master` — the main job never checks it out; separate workflow steps clone it into a subdirectory and commit/push there only if something actually changed. `master`'s commit log is never touched by the automation.
   - Test locally against a throwaway file: `python tools/manage_pause_state.py /tmp/test_state.json` (uses local `.env`'s `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`/`HOME_TIMEZONE`).
   - Confirmed cost: ~275 min/month of GitHub's 2,000 free (private repo) at hourly polling — exhausting the quota stops workflow runs rather than billing, by default (worth the user verifying that toggle in their own billing settings).
+- **Daily news section** (`tools/fetch_news.py`, standalone feature tracked separately from the Stage 5 commit): 5 free, no-API-key RSS feeds — World/Europe/Spain/Switzerland (regions) plus Financial (a cross-cutting markets topic, not a 5th region). Each feed's failure is independently non-fatal — one dead/slow feed just skips that category, never fails the briefing (same philosophy as the travel-location inference). Fetched fresh on every actual send (not on the cheap hourly polls) and handed to the same tool-less styled-rendering call as more plain-text data — no new tool access granted.
+  - **This removed the "genuinely zero-Claude quiet day" case** — `compose_styled_briefing()` now always runs, even with an empty calendar/inbox, since judging news significance needs Claude's judgment regardless. Accepted trade-off, not an oversight.
+  - The news block is the only one of the four that can be fully omitted (no placeholder) — see `.claude/skills/briefing-style/SKILL.md` for the significance/brevity/headline-skepticism rules Claude applies.
+
+## Conventions (added Stage 5, reliability follow-up)
+
+- **GitHub's own `schedule:` cron trigger is unreliable for this repo** — confirmed by direct observation: across several hours, including a dedicated 5-minute-interval test, exactly one scheduled run actually fired, versus many manual ones. GitHub documents `schedule` as best-effort, and low-activity free/private repos appear to be deprioritized further, sometimes for hours. The hourly `schedule:` entry in `.github/workflows/morning-briefing.yml` is kept as a free backup, but is not treated as the primary trigger.
+- **Primary trigger: an external cron service pinging `workflow_dispatch` directly** via GitHub's REST API, every 10-15 minutes. Dispatched runs start immediately and reliably (unlike `schedule`), since they're a direct API call rather than GitHub's internal scheduler.
+- **`force` input decouples "manually triggered" from "force send"**: `workflow_dispatch` takes a `force` boolean input (default `false`). `FORCE_SEND` is only `1` when that input is explicitly `true`. A plain dispatch (what the external pinger sends) goes through the same `is_time_to_send()` gate a real scheduled run would — required because the pinger fires every few minutes, not once an hour; without this, every ping would force-send immediately.
+- **`is_time_to_send()` is "at or past send_time", not an exact hour match** — a delayed trigger (from either `schedule` or the external pinger) still catches up and sends, rather than permanently missing a day because it landed a few minutes outside a single matching hour.
+- **One-time setup (done by the user — creating credentials/third-party accounts is outside what Claude does on someone's behalf)**:
+  1. GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token. Repository access: this repo only. Permissions: Actions → Read and write.
+  2. Sign up for a free external cron-ping service (e.g. cron-job.org).
+  3. Create a job there: `POST https://api.github.com/repos/pelayogmj/morning-briefing-bot/actions/workflows/morning-briefing.yml/dispatches`, headers `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, body `{"ref": "master"}`. Schedule every 10-15 minutes.
+  4. Leave `force` unset (or `false`) in that body, so pings go through the normal gate instead of force-sending every time.
 
 ## Bottom Line
 

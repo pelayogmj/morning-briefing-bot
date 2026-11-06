@@ -192,10 +192,19 @@ def test_is_time_to_send_matching_hour_not_yet_sent():
     assert is_time_to_send(state, "Europe/Zurich", now=now) is True
 
 
-def test_is_time_to_send_wrong_hour():
+def test_is_time_to_send_before_target():
+    state = {**DEFAULT_STATE, "send_time": "07:00"}
+    now = datetime(2026, 11, 5, 6, 30, tzinfo=ZoneInfo("Europe/Zurich"))
+    assert is_time_to_send(state, "Europe/Zurich", now=now) is False
+
+
+def test_is_time_to_send_catches_up_after_delayed_hour():
+    # A run meant for the 07:00 slot can start late (GitHub's scheduled
+    # cron is best-effort) -- a later poll the same day, still before
+    # any send, must still catch up rather than staying skipped.
     state = {**DEFAULT_STATE, "send_time": "07:00"}
     now = datetime(2026, 11, 5, 10, 0, tzinfo=ZoneInfo("Europe/Zurich"))
-    assert is_time_to_send(state, "Europe/Zurich", now=now) is False
+    assert is_time_to_send(state, "Europe/Zurich", now=now) is True
 
 
 def test_is_time_to_send_already_sent_today():
@@ -251,6 +260,6 @@ def test_should_send_forced_still_respects_pause():
 def test_should_send_not_forced_uses_normal_gate():
     state = {**DEFAULT_STATE, "send_time": "07:00"}
     matching_hour = datetime(2026, 11, 5, 7, 0, tzinfo=ZoneInfo("Europe/Zurich"))
-    wrong_hour = datetime(2026, 11, 5, 15, 0, tzinfo=ZoneInfo("Europe/Zurich"))
+    before_target = datetime(2026, 11, 5, 6, 30, tzinfo=ZoneInfo("Europe/Zurich"))
     assert should_send(state, "Europe/Zurich", now=matching_hour) is True
-    assert should_send(state, "Europe/Zurich", now=wrong_hour) is False
+    assert should_send(state, "Europe/Zurich", now=before_target) is False

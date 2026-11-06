@@ -7,11 +7,12 @@ user-invocable: false
 # Briefing Style
 
 Rules for turning the raw output of `tools/get_weather.py`,
-`tools/get_calendar.py`, and `tools/get_gmail.py` into the final text
-shown to the user — used by both the interactive `/briefing` command and
-the automated `tools/send_morning_briefing.py` pipeline. This is
-presentation guidance only — never re-fetch or re-derive the underlying
-data; just rephrase what the tools already reported.
+`tools/get_calendar.py`, `tools/get_gmail.py`, and `tools/fetch_news.py`
+into the final text shown to the user — used by both the interactive
+`/briefing` command and the automated `tools/send_morning_briefing.py`
+pipeline. This is presentation guidance only — never re-fetch or
+re-derive the underlying data; just rephrase (and, for news, filter)
+what the tools already reported.
 
 ## Tone
 
@@ -27,12 +28,12 @@ Rephrase facts the way a person would say them out loud.
 
 ## Format
 
-Always exactly three blocks, in this fixed order, **separated by a
-blank line** — never reorder based on urgency, and never merge them
-into one flowing paragraph. This is plain text (no Markdown/HTML bold
-or asterisks — it won't render as formatting and may break delivery)
-— use an emoji at the start of each block instead to make it scannable
-at a glance:
+Always three required blocks plus one optional 4th, in this fixed
+order, **separated by a blank line** — never reorder based on urgency,
+and never merge them into one flowing paragraph. This is plain text
+(no Markdown/HTML bold or asterisks — it won't render as formatting
+and may break delivery) — use an emoji at the start of each block
+instead to make it scannable at a glance:
 
 1. **🌤️ Weather** (pick the emoji to match conditions — e.g. ☀️ clear,
    ⛅/☁️ cloudy/overcast, 🌧️ rain, ❄️ snow, 🌫️ fog, ⛈️ thunderstorms):
@@ -54,10 +55,40 @@ at a glance:
    never blend multiple emails into consecutive sentences, and never
    combine them into one sentence (unlike the calendar line, which does
    combine). If there are no unread emails: "Inbox is empty."
+4. **🌍 News** (optional — the only block that can be fully omitted;
+   unlike the three above, it never falls back to a placeholder like
+   "nothing notable"). Two dimensions, not one flat list: regions
+   (global, Spain, Switzerland, Europe) crossed with topics (politics/
+   social/environmental, and financial markets as a cross-cutting lens
+   on those same regions — not a separate 5th place). Rules:
+   - Only include this block if something is genuinely significant.
+     If nothing meets that bar, skip the block entirely — no "quiet
+     news day today" line, nothing. Silence is the correct output on
+     most days.
+   - Hard cap: 1–5 sentences *total*, not per region/topic. One clearly
+     significant item beats three marginal ones — never pad toward the
+     cap just to fill it.
+   - **Each sentence is one short clause, core fact only** — roughly
+     15–20 words, no backstory, no quotes, no "which comes after/amid
+     ..." context clauses, no restating the same fact two ways. Say
+     "Spain raised its minimum wage by 5%," not "Spain's government
+     announced today that it will be raising the minimum wage by 5%,
+     a move that comes after months of pressure from unions." If a
+     story needs more than one short clause to state the core fact,
+     cut the rest rather than extending the sentence.
+   - **Judge substance, not headline tone.** Headlines (financial or
+     otherwise) are often written to grab attention rather than
+     neutrally state significance. Use each item's title *and*
+     description together to judge genuine newsworthiness — a dramatic-
+     sounding title isn't proof something matters, and a flat-sounding
+     one doesn't mean it doesn't.
+   - For markets specifically: mention a concrete figure (e.g. "+1.2%")
+     only if the source material actually states one — never invent a
+     number; describe direction/reason in plain words otherwise.
 
 Keep this same shape every time so the briefing is consistently
 scannable. No padding, no preamble like "Here is your briefing:" —
-just the three blocks above, each starting with its emoji. Don't
+just the blocks above, each starting with its emoji. Don't
 over-elaborate low-signal sections — one unread email or one quiet
 afternoon still gets just one short line.
 

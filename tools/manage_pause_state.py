@@ -177,14 +177,21 @@ def resolve_effective_timezone(state, home_timezone):
 
 
 def is_time_to_send(state, home_timezone, now=None):
-    """True if, right now (local time in the effective timezone), it's
-    the matching hour for `send_time` and we haven't already sent today
-    (local date).
+    """True if, right now (local time in the effective timezone), we're
+    at or past `send_time` and haven't already sent today (local date).
 
     `now`, if given, must be a tz-aware datetime (for testing);
-    otherwise the real current time is used. Matching is hour-granular
-    only -- this runs on an hourly poll, so minute-level precision
-    isn't achievable regardless of `send_time`'s minute component.
+    otherwise the real current time is used.
+
+    Deliberately "at or past", not an exact hour match: GitHub's
+    scheduled-workflow cron is best-effort and can be delayed by tens
+    of minutes under load (observed directly -- a run meant for one
+    hour slot actually started 25 minutes into the next). An exact
+    match has no way to recover from that -- a delayed run just misses
+    its window and the whole day goes unsent. "At or past" means
+    whichever poll first lands after send_time that day catches up and
+    sends, even if the intended hour's run was delayed or skipped
+    entirely.
     """
     tz = ZoneInfo(resolve_effective_timezone(state, home_timezone))
     current = now.astimezone(tz) if now is not None else datetime.now(tz)
@@ -192,8 +199,10 @@ def is_time_to_send(state, home_timezone, now=None):
     if state.get("last_sent_date") == current.date().isoformat():
         return False
 
-    target_hour = int(state.get("send_time", "07:00").split(":")[0])
-    return current.hour == target_hour
+    target_hour, target_minute = (
+        int(part) for part in state.get("send_time", "07:00").split(":")
+    )
+    return (current.hour, current.minute) >= (target_hour, target_minute)
 
 
 def should_send(state, home_timezone, forced=False, now=None):
