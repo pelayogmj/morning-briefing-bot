@@ -138,6 +138,17 @@ credentials.json, token.json  # Google OAuth (gitignored)
   3. Create a job there: `POST https://api.github.com/repos/pelayogmj/morning-briefing-bot/actions/workflows/morning-briefing.yml/dispatches`, headers `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, body `{"ref": "master"}`. Schedule every 10-15 minutes.
   4. Leave `force` unset (or `false`) in that body, so pings go through the normal gate instead of force-sending every time.
 
+## Conventions (added: Tasks section)
+
+- **✅ Tasks block** (`tools/get_tasks.py`), inserted between Inbox and News in both briefing paths (`tools/send_morning_briefing.py` and the interactive `/briefing`'s `tools/morning_briefing.py` — News was also backfilled into the latter at the same time, since it had never been added there). Unlike News, Tasks is a **required** block — it always renders one of three fixed cases and is never fully omitted; its fetch failure is treated as a hard failure (`sys.exit(1)`), same tier as Calendar/Gmail/Weather, not News's soft-fail style.
+- **List matching, not a hardcoded name**: `is_todo_list_title()` normalizes a Google Tasks list's title (lowercase, strip spaces/hyphens) and matches if it contains `"todo"` — catches "TODOs", "To-Do List", "to do", etc. without depending on one exact literal name. Tasks from every matching list are merged; zero matches falls through naturally to the "all clear" case (not an error).
+- **Three rendering cases, in order** (`format_tasks_summary()`): (1) any task due today or overdue → bullet list, overdue ones explicitly labeled with their original due date; (2) else, any dateless open task → one line reporting the count; (3) else → a fixed "to-do list is clear" line. A task with a **future** due date counts toward neither case — it's not today's business yet.
+- **Changing `google_auth.py`'s shared `SCOPES` list requires re-consenting, not just redeploying.** `token.json` is scoped to whatever was in `SCOPES` when it was generated — adding a new scope (here, `tasks.readonly`) doesn't retroactively apply to the cached token; `get_credentials()` has no "upgrade scopes" path, only full re-consent. After any `SCOPES` change:
+  1. Enable the newly-needed API in Google Cloud Console (same place Calendar/Gmail were enabled).
+  2. Delete the local `token.json`.
+  3. Run any Google-auth tool locally once (e.g. `tools/get_tasks.py`) to re-trigger interactive OAuth consent and regenerate `token.json` against the full new scope list.
+  4. Update the `GOOGLE_TOKEN_JSON` GitHub repo secret with the regenerated file's contents (see Stage 5's "Google secrets in CI") — CI keeps using whatever was last stored there, so skipping this step means local runs work while the scheduled briefing keeps failing on the old, insufficient scope.
+
 ## Bottom Line
 
 You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.

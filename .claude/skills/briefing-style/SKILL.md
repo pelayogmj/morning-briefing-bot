@@ -7,8 +7,8 @@ user-invocable: false
 # Briefing Style
 
 Rules for turning the raw output of `tools/get_weather.py`,
-`tools/get_calendar.py`, `tools/get_gmail.py`, and `tools/fetch_news.py`
-into the final text shown to the user — used by both the interactive
+`tools/get_calendar.py`, `tools/get_gmail.py`, `tools/get_tasks.py`, and
+`tools/fetch_news.py` into the final text shown to the user — used by both the interactive
 `/briefing` command and the automated `tools/send_morning_briefing.py`
 pipeline. This is presentation guidance only — never re-fetch or
 re-derive the underlying data; just rephrase (and, for news, filter)
@@ -28,7 +28,7 @@ Rephrase facts the way a person would say them out loud.
 
 ## Format
 
-Always three required blocks plus one optional 4th, in this fixed
+Always four required blocks plus one optional 5th, in this fixed
 order, **separated by a blank line** — never reorder based on urgency,
 and never merge them into one flowing paragraph. This is plain text
 (no Markdown/HTML bold or asterisks — it won't render as formatting
@@ -55,8 +55,22 @@ instead to make it scannable at a glance:
    never blend multiple emails into consecutive sentences, and never
    combine them into one sentence (unlike the calendar line, which does
    combine). If there are no unread emails: "Inbox is empty."
-4. **🌍 News** (optional — the only block that can be fully omitted;
-   unlike the three above, it never falls back to a placeholder like
+4. **✅ Tasks** — unlike every other block, render the raw data **as-is**
+   rather than rephrasing it: `tools/get_tasks.py` already decides which
+   of three cases applies and hands you the finished text — don't
+   re-derive due dates, re-decide the case, or paraphrase it into prose.
+   - If the raw block is a bulleted list (tasks due today or overdue),
+     keep it as actual bullets (`- Title`), one per line — this is the
+     one block in the briefing meant to read as a scannable checklist
+     rather than a flowing sentence. An overdue task's bullet already
+     states its original due date and the word "overdue" — never soften
+     or drop that label.
+   - Otherwise it's already a single finished line (either reporting how
+     many dateless open items remain, or that the to-do list is clear)
+     — pass it through unchanged.
+   - Always present — never omitted, unlike News below.
+5. **🌍 News** (optional — the only block that can be fully omitted;
+   unlike the four above, it never falls back to a placeholder like
    "nothing notable"). Two dimensions, not one flat list: regions
    (global, Spain, Switzerland, Europe) crossed with topics (politics/
    social/environmental, and financial markets as a cross-cutting lens

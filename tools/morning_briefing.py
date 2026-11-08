@@ -11,8 +11,10 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from fetch_news import fetch_all_headlines, format_headlines_block
 from get_calendar import fetch_today_events, format_events_summary, parse_events
 from get_gmail import DEFAULT_LIMIT, fetch_top_unread, format_inbox_summary, parse_unread_messages
+from get_tasks import fetch_tasks, format_tasks_summary, parse_tasks
 from get_weather import fetch_forecast, format_summary, parse_today, save_snapshot
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -57,11 +59,24 @@ def main():
         sys.exit(1)
     inbox_block = format_inbox_summary(parse_unread_messages(messages))
 
+    try:
+        tasks = fetch_tasks()
+    except Exception as exc:
+        print(f"Error: could not fetch Google Tasks ({exc})", file=sys.stderr)
+        sys.exit(1)
+    tasks_block = format_tasks_summary(parse_tasks(tasks))
+
+    news_block = format_headlines_block(fetch_all_headlines())
+
     print(weather_line)
     print()
     print(events_block)
     print()
     print(inbox_block)
+    print()
+    print(tasks_block)
+    print()
+    print(news_block)
 
 
 if __name__ == "__main__":

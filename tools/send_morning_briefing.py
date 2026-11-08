@@ -24,6 +24,7 @@ from get_gmail import (
     parse_unread_messages,
 )
 from fetch_news import fetch_all_headlines, format_headlines_block
+from get_tasks import fetch_tasks, format_tasks_summary, parse_tasks
 from get_weather import fetch_forecast, format_summary, parse_today, save_snapshot
 from manage_pause_state import load_state, resolve_effective_timezone, save_state
 from resolve_location import geocode
@@ -148,7 +149,7 @@ def resolve_todays_location(home_name, home_lat, home_lon, events):
     return home_name, home_lat, home_lon
 
 
-def compose_styled_briefing(weather_line, events_block, inbox_block, news_block):
+def compose_styled_briefing(weather_line, events_block, inbox_block, tasks_block, news_block):
     """Invoke headless Claude to render the full styled briefing.
 
     All data is fetched deterministically by this script (main(), below)
@@ -179,6 +180,7 @@ def compose_styled_briefing(weather_line, events_block, inbox_block, news_block)
         f"Weather: {weather_line}\n\n"
         f"Calendar: {events_block}\n\n"
         f"Inbox: {inbox_block}\n\n"
+        f"Tasks: {tasks_block}\n\n"
         f"News headlines (raw, unfiltered -- judge for yourself what, if "
         f"anything, is actually significant enough to mention):\n{news_block}\n\n"
         f"Read {SKILL_PATH} and follow its tone, format, and content "
@@ -251,6 +253,12 @@ def main():
         print(f"Error: could not fetch Gmail messages ({exc})", file=sys.stderr)
         sys.exit(1)
 
+    try:
+        tasks = parse_tasks(fetch_tasks())
+    except Exception as exc:
+        print(f"Error: could not fetch Google Tasks ({exc})", file=sys.stderr)
+        sys.exit(1)
+
     # infer_travel_location() already returns None for an empty events
     # list, which cascades to the home default below -- no special-case
     # branch needed here for an empty calendar.
@@ -271,12 +279,14 @@ def main():
     # always runs, to judge whether anything is significant enough to
     # mention. A feed failure is non-fatal (see fetch_news.py).
     news_block = format_headlines_block(fetch_all_headlines())
+    tasks_block = format_tasks_summary(tasks)
 
     try:
         message = compose_styled_briefing(
             weather_line,
             format_events_summary(events),
             format_inbox_summary(messages),
+            tasks_block,
             news_block,
         )
     except (RuntimeError, subprocess.TimeoutExpired) as exc:
