@@ -39,32 +39,36 @@ instead to make it scannable at a glance:
    ⛅/☁️ cloudy/overcast, 🌧️ rain, ❄️ snow, 🌫️ fog, ⛈️ thunderstorms):
    "Good morning! Today in {location} {weather description}, {temps},
    {rain chance}."
-2. **📅 Calendar** — combine *every* event from today into one flowing
-   sentence (not bullets), each with its time and title, e.g.: "Today's
-   events are: lunch with Alex at 12:30, a team meeting at 15:00, and
-   dinner with Megan at 21:00." If there are no events: "Nothing on your
-   calendar today."
-3. **💬 Inbox** — for each unread email, write a short summary of what
-   it's actually *about*, using its snippet (the short content preview
-   each email tool run provides) — not a reworded subject line. E.g.
-   given subject "Fwd: You've been invited..." and a snippet about a
-   collaboration invite, write something like "You've got a forwarded
-   invite to collaborate on a project." If there's exactly one email,
-   write it as a single line with no number. **If there's more than
-   one, use a numbered list** (`1.`, `2.`, ...), one email per line —
-   never blend multiple emails into consecutive sentences, and never
-   combine them into one sentence (unlike the calendar line, which does
-   combine). If there are no unread emails: "Inbox is empty."
-4. **✅ Tasks** — unlike every other block, render the raw data **as-is**
+2. **📅 Calendar** — if there's at least one event, start with "Today's
+   events are:" then a bulleted list (`•`, not `-`), one event per
+   bullet, each stating its time and title, e.g.:
+   "Today's events are:
+   • 12:30 lunch with Alex
+   • 15:00 team meeting
+   • 21:00 dinner with Megan"
+   If there are no events: just "Nothing on your calendar today." — no
+   lead-in line, no bullets, that one line only.
+3. **📬 Inbox** — if there's at least one unread email, start with "Your
+   unread emails are:" then a bulleted list (`•`, not `-` or numbers),
+   one email per bullet. For each, write a short summary of what it's
+   actually *about*, using its snippet (the short content preview each
+   email tool run provides) — not a reworded subject line. E.g. given
+   subject "Fwd: You've been invited..." and a snippet about a
+   collaboration invite, write "• You've got a forwarded invite to
+   collaborate on a project." Never blend multiple emails into one
+   bullet or merge them into prose. If there are no unread emails: just
+   "Inbox is empty." — no lead-in line, no bullets.
+4. **📋 Tasks** — unlike every other block, render the raw data **as-is**
    rather than rephrasing it: `tools/get_tasks.py` already decides which
-   of three cases applies and hands you the finished text — don't
-   re-derive due dates, re-decide the case, or paraphrase it into prose.
-   - If the raw block is a bulleted list (tasks due today or overdue),
-     keep it as actual bullets (`- Title`), one per line — this is the
-     one block in the briefing meant to read as a scannable checklist
-     rather than a flowing sentence. An overdue task's bullet already
-     states its original due date and the word "overdue" — never soften
-     or drop that label.
+   of three cases applies and hands you the finished text, lead-in line
+   and bullets included where relevant — don't re-derive due dates,
+   re-decide the case, or paraphrase it into prose.
+   - If the raw block starts with "Today's tasks are:" followed by a
+     bulleted list (`•`), keep it exactly as given — this is the one
+     block in the briefing meant to read as a scannable checklist rather
+     than a flowing sentence. An overdue task's bullet already states
+     its original due date and the word "overdue" — never soften or
+     drop that label.
    - Otherwise it's already a single finished line (either reporting how
      many dateless open items remain, or that the to-do list is clear)
      — pass it through unchanged.

@@ -62,12 +62,12 @@ def format_tasks_summary(tasks, today=None):
     dateless = [t for t in tasks if t["due"] is None]
 
     if due_today_or_overdue:
-        lines = []
+        lines = ["Today's tasks are:"]
         for t in sorted(due_today_or_overdue, key=lambda t: t["due"]):
             if t["due"] < today:
-                lines.append(f"- {t['title']} (due {t['due'].isoformat()}, overdue)")
+                lines.append(f"• {t['title']} (due {t['due'].isoformat()}, overdue)")
             else:
-                lines.append(f"- {t['title']}")
+                lines.append(f"• {t['title']}")
         return "\n".join(lines)
 
     if dateless:

@@ -46,13 +46,15 @@ TODAY = date(2026, 11, 5)
 
 def test_format_tasks_summary_bullets_due_today():
     tasks = [{"title": "Submit report", "due": TODAY}]
-    assert format_tasks_summary(tasks, today=TODAY) == "- Submit report"
+    assert format_tasks_summary(tasks, today=TODAY) == (
+        "Today's tasks are:\n• Submit report"
+    )
 
 
 def test_format_tasks_summary_labels_overdue():
     tasks = [{"title": "Call dentist", "due": date(2026, 11, 2)}]
     assert format_tasks_summary(tasks, today=TODAY) == (
-        "- Call dentist (due 2026-11-02, overdue)"
+        "Today's tasks are:\n• Call dentist (due 2026-11-02, overdue)"
     )
 
 
@@ -62,7 +64,9 @@ def test_format_tasks_summary_mixes_overdue_and_due_today_sorted():
         {"title": "Call dentist", "due": date(2026, 11, 2)},
     ]
     assert format_tasks_summary(tasks, today=TODAY) == (
-        "- Call dentist (due 2026-11-02, overdue)\n- Submit report"
+        "Today's tasks are:\n"
+        "• Call dentist (due 2026-11-02, overdue)\n"
+        "• Submit report"
     )
 
 
@@ -107,7 +111,9 @@ def test_format_tasks_summary_due_today_takes_priority_over_dateless():
         {"title": "Submit report", "due": TODAY},
         {"title": "Read a book", "due": None},
     ]
-    assert format_tasks_summary(tasks, today=TODAY) == "- Submit report"
+    assert format_tasks_summary(tasks, today=TODAY) == (
+        "Today's tasks are:\n• Submit report"
+    )
 
 
 def test_format_tasks_summary_all_clear():
