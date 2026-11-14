@@ -36,13 +36,15 @@ def main():
         )
         sys.exit(1)
 
+    # Soft-fail, unlike the other blocks below: a dead upstream weather
+    # API shouldn't block the rest of an otherwise-complete briefing.
     try:
         weather_response = fetch_forecast(lat, lon)
+        save_snapshot(weather_response)
+        weather_line = format_summary(location_name, parse_today(weather_response))
     except requests.RequestException as exc:
-        print(f"Error: could not fetch weather data ({exc})", file=sys.stderr)
-        sys.exit(1)
-    save_snapshot(weather_response)
-    weather_line = format_summary(location_name, parse_today(weather_response))
+        print(f"Warning: could not fetch weather data ({exc})", file=sys.stderr)
+        weather_line = "Weather data is currently unavailable."
 
     try:
         calendar_items = fetch_today_events()

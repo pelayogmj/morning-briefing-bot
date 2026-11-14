@@ -14,8 +14,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TMP_DIR = PROJECT_ROOT / ".tmp"
 
 # Open-Meteo occasionally resets the connection (observed repeatedly as
-# ConnectionResetError on Windows) for no server-side reason -- a transient
-# network blip, not a real failure. Retry a couple of times before giving up.
+# ConnectionResetError on Windows) or times out reading a response
+# (observed in CI as a ReadTimeout) for no server-side reason -- transient
+# network blips, not real failures. Retry a couple of times before giving
+# up. Both ConnectionError and Timeout are caught -- requests.ReadTimeout
+# is a Timeout subclass, NOT a ConnectionError subclass, so catching only
+# ConnectionError (as this used to) silently skips retrying on a timeout.
 MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 2
 
@@ -87,7 +91,7 @@ def fetch_forecast(lat, lon):
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             return response.json()
-        except requests.exceptions.ConnectionError as exc:
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
             last_error = exc
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_DELAY_SECONDS)

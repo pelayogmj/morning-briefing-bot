@@ -149,6 +149,11 @@ credentials.json, token.json  # Google OAuth (gitignored)
   3. Run any Google-auth tool locally once (e.g. `tools/get_tasks.py`) to re-trigger interactive OAuth consent and regenerate `token.json` against the full new scope list.
   4. Update the `GOOGLE_TOKEN_JSON` GitHub repo secret with the regenerated file's contents (see Stage 5's "Google secrets in CI") — CI keeps using whatever was last stored there, so skipping this step means local runs work while the scheduled briefing keeps failing on the old, insufficient scope.
 
+## Conventions (added: weather retry/soft-fail fix)
+
+- **`fetch_forecast`'s retry only ever caught `requests.exceptions.ConnectionError`** — a real bug, not a theoretical gap: `requests.exceptions.ReadTimeout` (seen in CI as "Read timed out") is a `Timeout` subclass, not a `ConnectionError` subclass, so a timeout skipped the retry loop entirely and failed on the first attempt. Fixed by catching `(requests.exceptions.ConnectionError, requests.exceptions.Timeout)` together — both are the same kind of "transient upstream blip," which is exactly what this retry exists for.
+- **Weather is now soft-fail, like News** — in both `tools/send_morning_briefing.py` and `tools/morning_briefing.py`, a weather fetch failure (even after `fetch_forecast`'s own retries are exhausted) no longer aborts the whole briefing via `sys.exit(1)`. It falls back to a plain `"Weather data is currently unavailable."` line and continues — Calendar/Gmail/Tasks remain hard-fail (still core, still required), but a dead weather API alone shouldn't block an otherwise-complete briefing from sending.
+
 ## Bottom Line
 
 You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.

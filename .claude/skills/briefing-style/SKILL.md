@@ -38,7 +38,10 @@ instead to make it scannable at a glance:
 1. **🌤️ Weather** (pick the emoji to match conditions — e.g. ☀️ clear,
    ⛅/☁️ cloudy/overcast, 🌧️ rain, ❄️ snow, 🌫️ fog, ⛈️ thunderstorms):
    "Good morning! Today in {location} {weather description}, {temps},
-   {rain chance}."
+   {rain chance}." If the raw data instead reports it's unavailable
+   (the upstream weather API can fail), say so plainly in one short
+   line — e.g. "Weather data isn't available this morning." — don't
+   force it into the template or invent conditions.
 2. **📅 Calendar** — if there's at least one event, start with "Today's
    events are:" then a bulleted list (`•`, not `-`), one event per
    bullet, each stating its time and title, e.g.:

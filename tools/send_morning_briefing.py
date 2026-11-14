@@ -266,13 +266,19 @@ def main():
         home_name, home_lat, home_lon, events
     )
 
+    # Weather is soft-fail, unlike Calendar/Gmail/Tasks above: a dead
+    # upstream API (Open-Meteo has been seen both resetting connections
+    # and timing out) shouldn't block the rest of an otherwise-complete
+    # briefing from sending. fetch_forecast() already retries transient
+    # errors itself; if it still fails after that, fall back to a plain
+    # "unavailable" line instead of aborting.
     try:
         forecast = fetch_forecast(lat, lon)
+        save_snapshot(forecast)
+        weather_line = format_summary(location_name, parse_today(forecast))
     except Exception as exc:
-        print(f"Error: could not fetch weather data ({exc})", file=sys.stderr)
-        sys.exit(1)
-    save_snapshot(forecast)
-    weather_line = format_summary(location_name, parse_today(forecast))
+        print(f"Warning: could not fetch weather data ({exc})", file=sys.stderr)
+        weather_line = "Weather data is currently unavailable."
 
     # News is checked every day regardless of calendar/inbox state -- the
     # "genuinely zero-Claude quiet day" case is gone by design: Claude now
