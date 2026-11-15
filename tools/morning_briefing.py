@@ -8,14 +8,13 @@ import os
 import sys
 from pathlib import Path
 
-import requests
 from dotenv import load_dotenv
 
 from fetch_news import fetch_all_headlines, format_headlines_block
 from get_calendar import fetch_today_events, format_events_summary, parse_events
 from get_gmail import DEFAULT_LIMIT, fetch_top_unread, format_inbox_summary, parse_unread_messages
 from get_tasks import fetch_tasks, format_tasks_summary, parse_tasks
-from get_weather import fetch_forecast, format_summary, parse_today, save_snapshot
+from get_weather import fetch_weather_line
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -36,15 +35,10 @@ def main():
         )
         sys.exit(1)
 
-    # Soft-fail, unlike the other blocks below: a dead upstream weather
-    # API shouldn't block the rest of an otherwise-complete briefing.
-    try:
-        weather_response = fetch_forecast(lat, lon)
-        save_snapshot(weather_response)
-        weather_line = format_summary(location_name, parse_today(weather_response))
-    except requests.RequestException as exc:
-        print(f"Warning: could not fetch weather data ({exc})", file=sys.stderr)
-        weather_line = "Weather data is currently unavailable."
+    # fetch_weather_line() is soft-fail, unlike the other blocks below:
+    # it tries Open-Meteo first, falls back to MET Norway if that's
+    # down, and only reports "unavailable" if both fail.
+    weather_line = fetch_weather_line(location_name, lat, lon)
 
     try:
         calendar_items = fetch_today_events()

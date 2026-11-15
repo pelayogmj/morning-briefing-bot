@@ -25,7 +25,7 @@ from get_gmail import (
 )
 from fetch_news import fetch_all_headlines, format_headlines_block
 from get_tasks import fetch_tasks, format_tasks_summary, parse_tasks
-from get_weather import fetch_forecast, format_summary, parse_today, save_snapshot
+from get_weather import fetch_weather_line
 from manage_pause_state import load_state, resolve_effective_timezone, save_state
 from resolve_location import geocode
 from send_telegram import send_message
@@ -266,19 +266,12 @@ def main():
         home_name, home_lat, home_lon, events
     )
 
-    # Weather is soft-fail, unlike Calendar/Gmail/Tasks above: a dead
-    # upstream API (Open-Meteo has been seen both resetting connections
-    # and timing out) shouldn't block the rest of an otherwise-complete
-    # briefing from sending. fetch_forecast() already retries transient
-    # errors itself; if it still fails after that, fall back to a plain
-    # "unavailable" line instead of aborting.
-    try:
-        forecast = fetch_forecast(lat, lon)
-        save_snapshot(forecast)
-        weather_line = format_summary(location_name, parse_today(forecast))
-    except Exception as exc:
-        print(f"Warning: could not fetch weather data ({exc})", file=sys.stderr)
-        weather_line = "Weather data is currently unavailable."
+    # fetch_weather_line() is soft-fail, unlike Calendar/Gmail/Tasks
+    # above: it tries Open-Meteo (with its own retries), falls back to
+    # MET Norway if that's still down, and only reports "unavailable" if
+    # both fail -- never raises, so a dead weather API alone doesn't
+    # block the rest of an otherwise-complete briefing from sending.
+    weather_line = fetch_weather_line(location_name, lat, lon)
 
     # News is checked every day regardless of calendar/inbox state -- the
     # "genuinely zero-Claude quiet day" case is gone by design: Claude now

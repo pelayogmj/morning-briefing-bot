@@ -4,7 +4,7 @@ import json
 import os
 import sys
 import time
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import requests
@@ -12,6 +12,16 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TMP_DIR = PROJECT_ROOT / ".tmp"
+
+# MET Norway's free Locationforecast API, used only as a fallback when
+# Open-Meteo is unavailable even after its own retries -- a second,
+# independently-hosted source so a single provider's outage (or, per
+# research, shared-IP throttling on GitHub's hosted runners) doesn't take
+# the weather block down. No API key, but their Terms of Service require
+# a descriptive User-Agent naming the app and a contact/repo link -- a
+# generic or missing one gets throttled (429) or blocked (403).
+FALLBACK_FORECAST_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
+FALLBACK_USER_AGENT = "MorningBriefingBot/1.0 github.com/pelayogmj/morning-briefing-bot"
 
 # Open-Meteo occasionally resets the connection (observed repeatedly as
 # ConnectionResetError on Windows) or times out reading a response
@@ -105,6 +115,92 @@ def save_snapshot(api_response):
     return snapshot_path
 
 
+def fetch_fallback_forecast(lat, lon):
+    response = requests.get(
+        FALLBACK_FORECAST_URL,
+        params={"lat": lat, "lon": lon},
+        headers={"User-Agent": FALLBACK_USER_AGENT},
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def parse_fallback_today(api_response, now=None):
+    """Extract today's high/low and a coarse rain-expected flag from a
+    MET Norway forecast.
+
+    Unlike Open-Meteo, MET Norway has no single daily max/min field and
+    no rain *probability* for non-Nordic locations (confirmed live for
+    Zurich) -- only hourly air_temperature, a 6-hour-window
+    air_temperature_max/min, and precipitation_amount (mm, not a
+    percentage). This aggregates every timeseries entry whose UTC date
+    matches `now` (today, if not given) into one high/low, and flags
+    rain as "expected" if any matching entry's precipitation_amount is
+    above zero -- a coarser yes/no signal than Open-Meteo's percentage,
+    reported as such rather than invented as a fake number.
+
+    Returns None if no timeseries entry matches today (e.g. an
+    unexpected response shape) -- the caller falls back further rather
+    than reporting bogus data.
+    """
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
+
+    highs, lows = [], []
+    rain_expected = False
+    for entry in api_response.get("properties", {}).get("timeseries", []):
+        entry_time = datetime.fromisoformat(entry["time"].replace("Z", "+00:00"))
+        if entry_time.date() != today:
+            continue
+        details = entry.get("data", {}).get("next_6_hours", {}).get("details", {})
+        if "air_temperature_max" in details:
+            highs.append(details["air_temperature_max"])
+        if "air_temperature_min" in details:
+            lows.append(details["air_temperature_min"])
+        if details.get("precipitation_amount", 0) > 0:
+            rain_expected = True
+
+    if not highs or not lows:
+        return None
+
+    return {"high": max(highs), "low": min(lows), "rain_expected": rain_expected}
+
+
+def format_fallback_summary(location_name, fallback_today):
+    rain_clause = "rain is possible" if fallback_today["rain_expected"] else "no rain is expected"
+    return (
+        f"Good morning! Today in {location_name}: high "
+        f"{fallback_today['high']:.0f}°C / low {fallback_today['low']:.0f}°C, "
+        f"{rain_clause}."
+    )
+
+
+def fetch_weather_line(location_name, lat, lon):
+    """The single entry point orchestrators should call: try Open-Meteo
+    (with its own built-in retries) first, fall back to MET Norway if
+    that's still unavailable, and only report "unavailable" if both
+    independent sources fail. Never raises -- a dead weather API
+    shouldn't block the rest of an otherwise-complete briefing.
+    """
+    try:
+        forecast = fetch_forecast(lat, lon)
+        save_snapshot(forecast)
+        return format_summary(location_name, parse_today(forecast))
+    except requests.RequestException as exc:
+        print(f"Warning: primary weather source failed ({exc})", file=sys.stderr)
+
+    try:
+        fallback_today = parse_fallback_today(fetch_fallback_forecast(lat, lon))
+        if fallback_today is None:
+            raise ValueError("no matching forecast entries for today")
+        return format_fallback_summary(location_name, fallback_today)
+    except Exception as exc:
+        print(f"Warning: fallback weather source also failed ({exc})", file=sys.stderr)
+
+    return "Weather data is currently unavailable."
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -122,16 +218,7 @@ def main():
         )
         sys.exit(1)
 
-    try:
-        api_response = fetch_forecast(lat, lon)
-    except requests.RequestException as exc:
-        print(f"Error: could not fetch weather data ({exc})", file=sys.stderr)
-        sys.exit(1)
-
-    snapshot_path = save_snapshot(api_response)
-    today = parse_today(api_response)
-    print(format_summary(location_name, today))
-    print(f"(raw forecast saved to {snapshot_path})")
+    print(fetch_weather_line(location_name, lat, lon))
 
 
 if __name__ == "__main__":

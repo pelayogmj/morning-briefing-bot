@@ -38,10 +38,19 @@ instead to make it scannable at a glance:
 1. **🌤️ Weather** (pick the emoji to match conditions — e.g. ☀️ clear,
    ⛅/☁️ cloudy/overcast, 🌧️ rain, ❄️ snow, 🌫️ fog, ⛈️ thunderstorms):
    "Good morning! Today in {location} {weather description}, {temps},
-   {rain chance}." If the raw data instead reports it's unavailable
-   (the upstream weather API can fail), say so plainly in one short
-   line — e.g. "Weather data isn't available this morning." — don't
-   force it into the template or invent conditions.
+   {rain chance}." Three possible raw shapes, handle each honestly:
+   - Full data (description, high/low, a rain percentage): use the
+     template above.
+   - A fallback reading (just high/low and "rain is possible"/"no rain
+     is expected", no condition description or percentage — this means
+     the primary weather source was down and a backup with less detail
+     was used): report the high/low and that rain clause plainly, e.g.
+     "it'll be between {low} and {high}, with rain possible" — don't
+     invent a sky condition (clear/cloudy/etc.) or a fake percentage
+     you weren't given.
+   - Unavailable (both weather sources failed): say so in one short
+     line — e.g. "Weather data isn't available this morning." — don't
+     force it into the template.
 2. **📅 Calendar** — if there's at least one event, start with "Today's
    events are:" then a bulleted list (`•`, not `-`), one event per
    bullet, each stating its time and title, e.g.:
