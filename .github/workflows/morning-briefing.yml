@@ -63,7 +63,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          HOME_TIMEZONE: Europe/Zurich
+          HOME_TIMEZONE: ${{ secrets.HOME_TIMEZONE }}
           FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force == 'true' && '1' || '0' }}
 
       # Only commits/pushes if the state file actually changed -- most
@@ -106,10 +106,10 @@ jobs:
         if: steps.check_pause.outputs.status == 'SEND'
         run: python tools/send_morning_briefing.py state-branch/briefing_state.json
         env:
-          LOCATION_NAME: Zurich
-          LAT: "0.0000"
-          LON: "0.0000"
-          HOME_TIMEZONE: Europe/Zurich
+          LOCATION_NAME: ${{ secrets.LOCATION_NAME }}
+          LAT: ${{ secrets.LAT }}
+          LON: ${{ secrets.LON }}
+          HOME_TIMEZONE: ${{ secrets.HOME_TIMEZONE }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

@@ -15,18 +15,32 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-MARKER_PATH = PROJECT_ROOT / ".claude" / ".security-review-passed"
+# Resolved from the process's actual working directory (via `git
+# rev-parse --show-toplevel`), not from this file's own path. In a git
+# worktree, the harness substitutes CLAUDE_PROJECT_DIR into the hook
+# command's path -- but that variable can still point at the main
+# checkout instead of the worktree, which silently pointed this hook at
+# the wrong repo's (empty) staged diff and blocked every commit here.
 COMMIT_PATTERN = re.compile(r"\bgit\s+commit\b")
 
 
-def staged_diff_hash():
+def repo_root():
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return Path(result.stdout.strip())
+
+
+def staged_diff_hash(project_root):
     # Raw bytes (no text=True) -- diffs can contain arbitrary UTF-8
     # content (e.g. emoji in a .md file) that Windows' default console
     # codepage can't decode; hashing bytes directly avoids that entirely.
     result = subprocess.run(
         ["git", "diff", "--cached"],
-        cwd=PROJECT_ROOT,
+        cwd=project_root,
         capture_output=True,
         check=True,
     )
@@ -44,11 +58,13 @@ def main():
         sys.exit(0)
 
     try:
-        current_hash = staged_diff_hash()
+        project_root = repo_root()
+        current_hash = staged_diff_hash(project_root)
     except subprocess.CalledProcessError:
         sys.exit(0)
 
-    stored_hash = MARKER_PATH.read_text().strip() if MARKER_PATH.exists() else None
+    marker_path = project_root / ".claude" / ".security-review-passed"
+    stored_hash = marker_path.read_text().strip() if marker_path.exists() else None
 
     if stored_hash != current_hash:
         print(

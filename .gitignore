@@ -8,3 +8,4 @@ __pycache__/
 venv/
 .vscode/
 .claude/.security-review-passed
+.mcp.json

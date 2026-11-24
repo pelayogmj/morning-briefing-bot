@@ -135,7 +135,7 @@ credentials.json, token.json  # Google OAuth (gitignored)
 - **One-time setup (done by the user — creating credentials/third-party accounts is outside what Claude does on someone's behalf)**:
   1. GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token. Repository access: this repo only. Permissions: Actions → Read and write.
   2. Sign up for a free external cron-ping service (e.g. cron-job.org).
-  3. Create a job there: `POST https://api.github.com/repos/pelayogmj/morning-briefing-bot/actions/workflows/morning-briefing.yml/dispatches`, headers `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, body `{"ref": "master"}`. Schedule every 10-15 minutes.
+  3. Create a job there: `POST https://api.github.com/repos/<owner>/<repo>/actions/workflows/morning-briefing.yml/dispatches`, headers `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, body `{"ref": "master"}`. Replace `<owner>/<repo>` with your own GitHub username/org and repo name. Schedule every 10-15 minutes.
   4. Leave `force` unset (or `false`) in that body, so pings go through the normal gate instead of force-sending every time.
 
 ## Conventions (added: Tasks section)
