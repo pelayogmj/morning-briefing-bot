@@ -174,30 +174,36 @@ New repository secret**. Add each of these:
 For the last two, open the file locally and paste its entire content
 as the secret value.
 
-## 10. Set up the external cron pinger
+## 10. Set up the trigger (Google Apps Script)
 
 GitHub's built-in `schedule:` trigger is unreliable on low-activity
-repos (see CLAUDE.md for why), so a free external service pings the
-workflow directly instead.
+repos (see CLAUDE.md for why), so a small Google Apps Script pings the
+workflow directly every 15 minutes instead. It runs free under the same
+Google account you already use, with no billing account.
 
 1. Create a fine-grained GitHub token: **Settings > Developer
    settings > Fine-grained tokens > Generate new token**. Repository
    access: this repo only. Permissions: **Actions: Read and write**.
-2. Sign up for a free cron service, e.g.
-   [cron-job.org](https://cron-job.org).
-3. Create a job there that sends:
-   - Method: `POST`
-   - URL:
-     `https://api.github.com/repos/<owner>/morning-briefing-bot/actions/workflows/morning-briefing.yml/dispatches`
-   - Headers:
-     - `Authorization: Bearer <your fine-grained token>`
-     - `Accept: application/vnd.github+json`
-     - `X-GitHub-Api-Version: 2022-11-28`
-   - Body: `{"ref": "master"}`
-   - Schedule: every 10-15 minutes.
-4. Leave `force` out of that body (or set it to `false`) so pings go
-   through the normal "is it actually time to send" check instead of
-   force-sending on every ping.
+2. Go to [script.google.com](https://script.google.com) > **New
+   project**. Replace the editor's contents with
+   [`scripts/apps_script_trigger.gs`](scripts/apps_script_trigger.gs)
+   and save.
+3. **Project Settings** (gear icon) > **Script properties** > add:
+   - `GITHUB_TOKEN`: the token from step 1
+   - `GITHUB_REPO`: `<owner>/<repo>`, e.g. `octocat/morning-briefing-bot`
+   - `GITHUB_REF` (optional): branch name, default `master`
+4. Back in the editor, pick `installTrigger` in the function dropdown
+   and click **Run**. Google asks you to approve the script's access
+   (connect to external services, run when you're not present); approve
+   it. This creates the 15-minute timer.
+5. Pick `pingBriefing` and click **Run** once. It should finish with
+   no error, and a new "Morning Briefing" run should appear under
+   **Actions** in your repo (it will just SKIP unless it's send time).
+
+The ping never sets `force`, so it always goes through the normal "is
+it actually time to send" check; at most one briefing a day is sent.
+Failed runs show under **Executions** in Apps Script, and Google emails
+you a summary of trigger failures.
 
 ## 11. Verify it's live
 

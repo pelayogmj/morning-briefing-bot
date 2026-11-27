@@ -15,18 +15,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Resolved from the process's actual working directory (via `git
-# rev-parse --show-toplevel`), not from this file's own path. In a git
-# worktree, the harness substitutes CLAUDE_PROJECT_DIR into the hook
-# command's path -- but that variable can still point at the main
-# checkout instead of the worktree, which silently pointed this hook at
-# the wrong repo's (empty) staged diff and blocked every commit here.
+# The repo is resolved from the `cwd` field of the hook's input payload
+# (the folder the Bash command actually runs in), via `git rev-parse
+# --show-toplevel`. Neither this file's own path nor the hook process's
+# working directory is reliable in a git worktree: both can point at the
+# main checkout, which silently made this hook check the wrong repo's
+# (empty) staged diff and block every commit made from a worktree.
 COMMIT_PATTERN = re.compile(r"\bgit\s+commit\b")
 
 
-def repo_root():
+def repo_root(cwd=None):
+    if cwd and not Path(cwd).is_dir():
+        cwd = None
     result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
+        cwd=cwd or None,
         capture_output=True,
         check=True,
         text=True,
@@ -58,7 +61,7 @@ def main():
         sys.exit(0)
 
     try:
-        project_root = repo_root()
+        project_root = repo_root(payload.get("cwd"))
         current_hash = staged_diff_hash(project_root)
     except subprocess.CalledProcessError:
         sys.exit(0)

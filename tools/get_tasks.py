@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 
+from get_calendar import local_today
 from google_auth import SCOPES, get_credentials
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -56,6 +57,9 @@ def format_tasks_summary(tasks, today=None):
     three cases -- excluded from the bullet list and from the dateless
     "N open items" count, since it isn't today's business either way.
     """
+    # Callers should pass `today` in the user's timezone (see
+    # get_calendar.local_today) -- date.today() is the machine's date,
+    # which on a UTC CI runner can be a different day.
     today = today or date.today()
 
     due_today_or_overdue = [t for t in tasks if t["due"] is not None and t["due"] <= today]
@@ -107,7 +111,7 @@ def main():
         print(f"Error: could not fetch Google Tasks ({exc})", file=sys.stderr)
         sys.exit(1)
 
-    print(format_tasks_summary(parse_tasks(items)))
+    print(format_tasks_summary(parse_tasks(items), today=local_today()))
 
 
 if __name__ == "__main__":

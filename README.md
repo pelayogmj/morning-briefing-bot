@@ -50,7 +50,10 @@ guessed at or dropped silently.
 - Telegram commands to pause/resume the bot, change its send time, or
   override its timezone while traveling, without touching any code.
 - Runs on a schedule with no server to maintain, using GitHub Actions'
-  free tier plus a free external cron ping for reliable timing.
+  free tier plus a free Google Apps Script timer for reliable timing.
+- Not tied to one AI: the model only ever gets text in and gives text
+  back (no tools), so switching provider is one setting
+  (`LLM_PROVIDER`, see `workflows/switch_ai_provider.md`).
 
 ## Claude Code features used
 
@@ -67,9 +70,11 @@ guessed at or dropped silently.
   shell commands, requiring a security review before any commit, and
   running tests automatically after editing a tool.
 - **Headless Claude** — the unattended GitHub Actions run calls the
-  `claude` CLI directly (no interactive session) to write the final
-  briefing text from already-fetched data, and separately to judge
-  whether today's calendar implies travel.
+  `claude` CLI directly (no interactive session, no tools) to write the
+  final briefing text from already-fetched data and the inlined style
+  rules, and separately to judge whether today's calendar implies
+  travel. Both calls go through `tools/llm.py`, so another provider's
+  CLI can be swapped in.
 - **MCP** — Google Calendar and Gmail MCP servers, usable inside an
   interactive Claude Code session (e.g. for `/briefing`). The
   unattended GitHub Actions run does not use MCP; it calls the Google
@@ -78,7 +83,7 @@ guessed at or dropped silently.
 ## Architecture
 
 ```
-GitHub Actions (hourly schedule + external cron ping)
+GitHub Actions (hourly schedule + Apps Script ping every 15 min)
         |
         v
 tools/manage_pause_state.py   -- reads Telegram commands, decides
@@ -93,7 +98,8 @@ tools/send_morning_briefing.py
         +--> tools/fetch_news.py      (free RSS feeds)
         |
         v
-headless `claude` call (reads the skill, writes the final text)
+tools/llm.py -> headless LLM call, no tools (style rules inlined,
+        |                          writes the final text)
         |
         v
 tools/send_telegram.py  -- sends the message
@@ -111,7 +117,7 @@ Gmail since a live session is available.
 
 See [SETUP.md](SETUP.md) for a full walkthrough, written for someone
 who has never used Google Cloud: Google OAuth, a Telegram bot, GitHub
-Actions secrets, the external cron pinger, and a first test run.
+Actions secrets, the Apps Script trigger, and a first test run.
 
 Quick local setup, once you have `credentials.json` from Google Cloud:
 
@@ -162,12 +168,13 @@ Built entirely on free tiers:
 - Claude: billed through your own Claude Pro/Max subscription (via
   `claude setup-token`), not a separate pay-per-token API key, so
   usage is bounded by your existing plan.
-- External cron pinger (e.g. cron-job.org): free tier.
+- Google Apps Script trigger: free on a personal Google account, no
+  billing account (96 pings/day vs. a ~20,000/day URL-fetch quota).
 
 ## Limitations
 
 - GitHub's own `schedule:` trigger is unreliable on low-activity
-  repos; this project relies on an external service pinging the
+  repos; this project relies on a Google Apps Script timer pinging the
   workflow instead (see SETUP.md).
 - Needs a one-time interactive Google OAuth consent from a human; it
   can't bootstrap that step unattended.

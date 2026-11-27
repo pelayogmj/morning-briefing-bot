@@ -11,7 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from fetch_news import fetch_all_headlines, format_headlines_block
-from get_calendar import fetch_today_events, format_events_summary, parse_events
+from get_calendar import fetch_today_events, format_events_summary, local_today, parse_events
 from get_gmail import DEFAULT_LIMIT, fetch_top_unread, format_inbox_summary, parse_unread_messages
 from get_tasks import fetch_tasks, format_tasks_summary, parse_tasks
 from get_weather import fetch_weather_line
@@ -40,6 +40,8 @@ def main():
     # down, and only reports "unavailable" if both fail.
     weather_line = fetch_weather_line(location_name, lat, lon)
 
+    # "Today" is measured in HOME_TIMEZONE if set, else this machine's
+    # zone -- see get_calendar.resolve_timezone_name.
     try:
         calendar_items = fetch_today_events()
     except Exception as exc:
@@ -60,7 +62,7 @@ def main():
     except Exception as exc:
         print(f"Error: could not fetch Google Tasks ({exc})", file=sys.stderr)
         sys.exit(1)
-    tasks_block = format_tasks_summary(parse_tasks(tasks))
+    tasks_block = format_tasks_summary(parse_tasks(tasks), today=local_today())
 
     news_block = format_headlines_block(fetch_all_headlines())
 

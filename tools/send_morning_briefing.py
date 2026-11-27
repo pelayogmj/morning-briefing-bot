@@ -1,13 +1,15 @@
 """Orchestrate the automated morning briefing: fetch data, infer today's
-likely location from the calendar, decide whether to invoke Claude for
-styling, and send the result via Telegram.
+likely location from the calendar, have an LLM style the briefing, and
+send the result via Telegram.
 
 Entry point for the GitHub Actions scheduled workflow (see
 .github/workflows/morning-briefing.yml). For interactive use, use the
 /briefing command instead -- this script is built for unattended runs.
+
+Both LLM calls go through tools/llm.py's run_llm(), which is
+provider-neutral (LLM_PROVIDER env var) and grants the model no tools.
 """
 import os
-import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -26,63 +28,46 @@ from get_gmail import (
 from fetch_news import fetch_all_headlines, format_headlines_block
 from get_tasks import fetch_tasks, format_tasks_summary, parse_tasks
 from get_weather import fetch_weather_line
+from llm import LLMError, run_llm
 from manage_pause_state import load_state, resolve_effective_timezone, save_state
 from resolve_location import geocode
 from send_telegram import send_message
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-HEADLESS_TIMEOUT_SECONDS = 300
-SKILL_PATH = ".claude/skills/briefing-style/SKILL.md"
-
-# shutil.which (not a bare "claude" string) resolves platform-specific
-# executable extensions -- on Windows, the npm global install is a
-# claude.cmd wrapper, and subprocess.run's list-argument form doesn't do
-# the shell's PATHEXT resolution needed to find it, failing with
-# FileNotFoundError even though `claude` works fine typed directly into
-# a shell. Linux (CI) has no such issue, but resolving properly here
-# means this script actually works for local testing too.
-CLAUDE_EXECUTABLE = shutil.which("claude") or "claude"
+SKILL_PATH = PROJECT_ROOT / ".claude" / "skills" / "briefing-style" / "SKILL.md"
 
 
-def run_headless_claude(prompt, extra_args):
-    """Run `claude -p` with the given prompt fed via stdin, not as a CLI
-    argument.
+def strip_frontmatter(text):
+    """Remove a leading YAML frontmatter block (--- ... ---), if any."""
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            return text[end + len("\n---"):].lstrip("\n")
+    return text
 
-    A multi-line prompt passed as a positional argument got silently
-    truncated at the first newline on Windows -- invoking the npm
-    .cmd wrapper routes through cmd.exe's own command-line parsing,
-    which doesn't handle embedded newlines in arguments. Stdin input
-    sidesteps that entirely and works identically on both platforms.
 
-    encoding="utf-8" is explicit and required: the briefing-style skill
-    uses emoji, and without it, text=True decodes using Windows' default
-    console codepage (cp1252), which can't handle them and crashes.
+def load_style_rules(path=SKILL_PATH):
+    """The briefing-style skill's rules, as plain text for the prompt.
+
+    SKILL.md stays the single source of truth (the interactive /briefing
+    command uses it as a Claude skill); here it's inlined into the prompt
+    so the model needs no file-reading tool, which any provider supports.
     """
-    result = subprocess.run(
-        [CLAUDE_EXECUTABLE, "-p", *extra_args],
-        input=prompt,
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=HEADLESS_TIMEOUT_SECONDS,
-    )
-    return result
+    return strip_frontmatter(Path(path).read_text(encoding="utf-8"))
 
 
 def infer_travel_location(events):
-    """Ask a minimal headless Claude call whether today's events imply
-    travel to a specific city -- covers informal cases a plain `location`
-    field check would miss, like an event titled "Meeting in Paris" or
-    "Train to Zurich" with no structured location set.
+    """Ask a minimal LLM call whether today's events imply travel to a
+    specific city -- covers informal cases a plain `location` field check
+    would miss, like an event titled "Meeting in Paris" or "Train to
+    Zurich" with no structured location set.
 
-    This call is granted NO tools at all (not even reading the skill
-    file) -- it can only return text. Event titles/locations come from
-    the user's own calendar, but anyone who can send them a calendar
-    invite can influence this input, so keeping it tool-less means even
-    a maliciously crafted invite attempting prompt injection can at
-    worst produce a wrong city guess (harmless -- falls back to home on
-    a bad geocode), never anything more dangerous.
+    The model has NO tools -- it can only return text. Event
+    titles/locations come from the user's own calendar, but anyone who
+    can send them a calendar invite can influence this input, so a
+    maliciously crafted invite attempting prompt injection can at worst
+    produce a wrong city guess (harmless -- falls back to home on a bad
+    geocode), never anything more dangerous.
 
     Returns a place name string, or None if no travel is indicated (or
     the call fails -- non-fatal, since this is an enhancement on top of
@@ -105,19 +90,15 @@ def infer_travel_location(events):
         "exactly HOME if there's no indication of travel. No other text."
     )
 
-    result = run_headless_claude(
-        prompt,
-        ["--permission-prompts", "none", "--tools", "", "--output-format", "text"],
-    )
-    if result.returncode != 0:
+    try:
+        answer = run_llm(prompt)
+    except (LLMError, OSError, subprocess.TimeoutExpired) as exc:
         print(
-            f"Warning: location inference failed, using home location "
-            f"({result.stderr.strip()})",
+            f"Warning: location inference failed, using home location ({exc})",
             file=sys.stderr,
         )
         return None
 
-    answer = result.stdout.strip()
     if not answer or answer.upper() == "HOME":
         return None
     return answer
@@ -149,62 +130,55 @@ def resolve_todays_location(home_name, home_lat, home_lon, events):
     return home_name, home_lat, home_lon
 
 
-def compose_styled_briefing(weather_line, events_block, inbox_block, tasks_block, news_block):
-    """Invoke headless Claude to render the full styled briefing.
-
-    All data is fetched deterministically by this script (main(), below)
-    and handed to Claude directly in the prompt -- it gets no Bash tool
-    at all for this step, only Read access to the one skill file.
-
-    This replaced an earlier design where Claude was asked to fetch the
-    data itself via Bash (even with one fully concrete pre-resolved
-    command): its actual tool-call invocation kept not matching the
-    literal --allowedTools pattern and getting silently auto-denied
-    under --permission-prompts none, so it explained the failure in
-    prose instead of erroring -- which then got sent as if it were the
-    real briefing. Removing Bash from this step removes that whole class
-    of failure. It also closes a real security gap: this step renders
-    actual email content, and a maliciously crafted email attempting
-    prompt injection could previously have tried to get an unattended
-    Bash-capable Claude to run something. With no Bash tool available,
-    the worst case is bad *text*, never an executed command.
-
-    Authenticates via CLAUDE_CODE_OAUTH_TOKEN (set in the environment),
-    bound to the Pro plan's usage limits rather than pay-per-token API
-    billing.
-    """
-    prompt = (
-        "Render today's morning briefing as prose. Here is the raw data "
-        "already fetched -- do not re-fetch, re-derive, or invent "
-        "anything beyond it:\n\n"
+def build_briefing_prompt(
+    style_rules, weather_line, events_block, inbox_block, tasks_block, news_block
+):
+    """The full, self-contained styling prompt: raw data plus the style
+    rules inlined, so the model needs no tools at all."""
+    return (
+        "Render today's morning briefing. Here is the raw data already "
+        "fetched -- do not re-fetch, re-derive, or invent anything beyond "
+        "it:\n\n"
         f"Weather: {weather_line}\n\n"
         f"Calendar: {events_block}\n\n"
         f"Inbox: {inbox_block}\n\n"
         f"Tasks: {tasks_block}\n\n"
         f"News headlines (raw, unfiltered -- judge for yourself what, if "
         f"anything, is actually significant enough to mention):\n{news_block}\n\n"
-        f"Read {SKILL_PATH} and follow its tone, format, and content "
-        "rules exactly."
+        "Follow these tone, format, and content rules exactly. Reply with "
+        "only the finished briefing text.\n\n"
+        "<style_rules>\n"
+        f"{style_rules}\n"
+        "</style_rules>"
     )
 
-    result = run_headless_claude(
-        prompt,
-        [
-            "--permission-prompts",
-            "none",
-            "--tools",
-            "Read",
-            "--allowedTools",
-            f"Read({SKILL_PATH})",
-            "--output-format",
-            "text",
-        ],
+
+def compose_styled_briefing(weather_line, events_block, inbox_block, tasks_block, news_block):
+    """Have the LLM render the full styled briefing.
+
+    All data is fetched deterministically by this script (main(), below)
+    and handed over directly in the prompt, together with the style
+    rules -- the model gets no tools at all for this step.
+
+    History: Claude was once asked to fetch data itself via Bash, then
+    later to Read the skill file under an --allowedTools pattern. Both
+    times its tool call silently failed to match the allowed pattern and
+    got auto-denied, so it explained the failure in prose instead of
+    erroring -- which then got sent as if it were the real briefing.
+    Inlining everything removes that whole class of failure, and closes a
+    security gap: this step renders real email content, and with no tools
+    a malicious email attempting prompt injection can at worst produce
+    bad *text*, never an executed command or a file read.
+    """
+    prompt = build_briefing_prompt(
+        load_style_rules(),
+        weather_line,
+        events_block,
+        inbox_block,
+        tasks_block,
+        news_block,
     )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"headless claude failed (exit {result.returncode}): {result.stderr}"
-        )
-    return result.stdout.strip()
+    return run_llm(prompt)
 
 
 def main():
@@ -241,8 +215,13 @@ def main():
     state = load_state(state_path)
     effective_timezone = resolve_effective_timezone(state, home_timezone)
 
+    # Calendar and Tasks both measure "today" in the effective timezone,
+    # never the runner's UTC clock (that mismatch listed all-day events a
+    # day early).
+    local_date = datetime.now(ZoneInfo(effective_timezone)).date()
+
     try:
-        events = parse_events(fetch_today_events())
+        events = parse_events(fetch_today_events(effective_timezone))
     except Exception as exc:
         print(f"Error: could not fetch calendar events ({exc})", file=sys.stderr)
         sys.exit(1)
@@ -278,7 +257,7 @@ def main():
     # always runs, to judge whether anything is significant enough to
     # mention. A feed failure is non-fatal (see fetch_news.py).
     news_block = format_headlines_block(fetch_all_headlines())
-    tasks_block = format_tasks_summary(tasks)
+    tasks_block = format_tasks_summary(tasks, today=local_date)
 
     try:
         message = compose_styled_briefing(
@@ -288,7 +267,7 @@ def main():
             tasks_block,
             news_block,
         )
-    except (RuntimeError, subprocess.TimeoutExpired) as exc:
+    except (LLMError, OSError, subprocess.TimeoutExpired) as exc:
         print(f"Error: could not compose styled briefing ({exc})", file=sys.stderr)
         sys.exit(1)
 

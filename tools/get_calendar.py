@@ -2,8 +2,9 @@
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
@@ -11,6 +12,32 @@ from googleapiclient.discovery import build
 from google_auth import SCOPES, get_credentials
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def filter_events_for_day(items, day):
+    """Drop all-day events that don't actually cover `day`.
+
+    The Calendar API returns any event overlapping the requested time
+    window. An all-day event is anchored to the *calendar's* timezone, so
+    when the window is computed in a different zone (e.g. a UTC CI
+    runner) tomorrow's all-day event overlaps today's window by an hour
+    or more and would be listed a day early. All-day events carry plain
+    dates with an exclusive `end.date`, so keep one only if
+    start.date <= day < end.date (which still handles multi-day events).
+    Timed events are kept as returned.
+    """
+    kept = []
+    for item in items:
+        start = item.get("start", {})
+        if "date" not in start:
+            kept.append(item)
+            continue
+        start_day = date.fromisoformat(start["date"])
+        end_raw = item.get("end", {}).get("date")
+        end_day = date.fromisoformat(end_raw) if end_raw else start_day + timedelta(days=1)
+        if start_day <= day < end_day:
+            kept.append(item)
+    return kept
 
 
 def parse_events(items):
@@ -50,27 +77,50 @@ def format_events_summary(events):
     return "\n".join(lines)
 
 
-def fetch_today_events():
+def resolve_timezone_name(timezone_name=None):
+    """The IANA zone "today" is measured in: the given name, else
+    HOME_TIMEZONE, else None (meaning the machine's own local zone)."""
+    return timezone_name or os.environ.get("HOME_TIMEZONE") or None
+
+
+def local_today(timezone_name=None):
+    """Today's date in the zone resolve_timezone_name() picks."""
+    timezone_name = resolve_timezone_name(timezone_name)
+    if timezone_name:
+        return datetime.now(ZoneInfo(timezone_name)).date()
+    return date.today()
+
+
+def fetch_today_events(timezone_name=None):
+    """Fetch today's events, where "today" is the local day in
+    `timezone_name` (see resolve_timezone_name) -- never the machine's
+    clock zone by accident, since CI runners are UTC."""
     creds = get_credentials(SCOPES)
     service = build("calendar", "v3", credentials=creds)
 
-    now = datetime.now().astimezone()
+    timezone_name = resolve_timezone_name(timezone_name)
+    if timezone_name:
+        now = datetime.now(ZoneInfo(timezone_name))
+    else:
+        now = datetime.now().astimezone()
     start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = start_of_day + timedelta(days=1)
     calendar_id = os.environ.get("CALENDAR_ID", "primary")
 
-    result = (
-        service.events()
-        .list(
-            calendarId=calendar_id,
-            timeMin=start_of_day.isoformat(),
-            timeMax=end_of_day.isoformat(),
-            singleEvents=True,
-            orderBy="startTime",
-        )
-        .execute()
-    )
-    return result.get("items", [])
+    list_args = {
+        "calendarId": calendar_id,
+        "timeMin": start_of_day.isoformat(),
+        "timeMax": end_of_day.isoformat(),
+        "singleEvents": True,
+        "orderBy": "startTime",
+    }
+    if timezone_name:
+        # Makes the API return timed events' dateTime in this zone, so the
+        # HH:MM parse_events() shows is local time for the user.
+        list_args["timeZone"] = timezone_name
+
+    result = service.events().list(**list_args).execute()
+    return filter_events_for_day(result.get("items", []), start_of_day.date())
 
 
 def main():
